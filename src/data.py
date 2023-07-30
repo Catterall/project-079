@@ -12,6 +12,7 @@ from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from tqdm import tqdm
 
 CHROME = 1
 FIREFOX = 2
@@ -20,11 +21,6 @@ EDGE = 3
 DEFAULT_OUT_SAMPLE_RATE = 44100
 DEFAULT_OUT_ID = 0
 DEFAULT_OUT_CHANNELS = 1
-
-TEST_PHRASES = [
-    (1, "test phrase 1"),
-    (2, "test phrase 2")
-]
 
 
 class DrSbaitsoAudioCollector:
@@ -88,11 +84,11 @@ class DrSbaitsoAudioCollector:
         self.stream = sd.InputStream(callback=self.callback, device=self.output_device_id, samplerate=self.output_device_samplerate)
         self.stream.start()
     
-    def check_silence(self, audio_file: str):
+    def check_silence(self, audio_file: str, silence_duration_ms: int = 1000, silence_threshold_db: int = -16):
         audio = AudioSegment.from_file(audio_file, format="wav")
-        silence = detect_silence(audio[-1000:], min_silence_len=500, silence_thresh=-16)
-        return len(silence) > 0
-    
+        silence = detect_silence(audio, min_silence_len=silence_duration_ms, silence_thresh=silence_threshold_db)
+        return any(s[1] - s[0] >= silence_duration_ms for s in silence)
+
     def stop_recording(self):
         self.stream.stop()
         self.stream.close()
@@ -117,26 +113,33 @@ class DrSbaitsoAudioCollector:
 Welcome to the audio producer for SCP-079's voice.
 
 In the selenium driver window, please procede to load DR SBAITSO.
-Once loaded, do .param and enter 0544.
+Once loaded, do .param and enter 1923.
 
 This will modify the voice of DR SBAITSO to be more like SCP-079's voice.
 Make sure to do test out this voice before continuing to prevent audio glitches upon first run.
 
 After this is done, enter anything here to continue: """, end="")
         input()
-
+        print('\n\n')
         os.makedirs('recordings', exist_ok=True)
         body = self.driver.find_element(By.XPATH, "//body")
-        for phrase_id, phrase in TEST_PHRASES:
+        number_of_phrases = len(phrases)
+        
+        pbar = tqdm(total=number_of_phrases, desc='Phrases', dynamic_ncols=True)
+        start_time = time.time()
+        for phrase_id, phrase in phrases:
+            pbar.set_description(f'({phrase_id}/{number_of_phrases}) "{phrase}"')
             body.send_keys('say ' + phrase)
+            time.sleep(0.3)  # Allow all keys to be entered.
             self.start_recording()
             body.send_keys(Keys.ENTER)
-            time.sleep(1)  # wait for TTS to start
             while True:
-                time.sleep(1)  # wait for a chunk of audio
                 filename = f'{phrase_id}'
                 self.save_recording(filename)
-                if self.check_silence(f'recordings/{filename}.wav'):
+                if self.check_silence(f'recordings/{filename}.wav', 750, -10000):
                     break
             self.stop_recording()
-
+            pbar.update(1)
+        pbar.close()
+        elapsed_time = time.time() - start_time
+        print(f'\n\nFinished in {elapsed_time} seconds.\n')
