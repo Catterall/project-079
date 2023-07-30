@@ -58,7 +58,7 @@ class Database:
                     data = await response.json()
                     rows = data["rows"]
                     for row in rows:
-                        phrase = row["row"]["translation"]["en"]
+                        phrase = row["row"]["translation"]["en"].replace('"', '')
                         await self.add_phrase(phrase)
 
     async def setup_database(self):
