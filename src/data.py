@@ -124,22 +124,30 @@ After this is done, enter anything here to continue: """, end="")
         os.makedirs('recordings', exist_ok=True)
         body = self.driver.find_element(By.XPATH, "//body")
         number_of_phrases = len(phrases)
-        
         pbar = tqdm(total=number_of_phrases, desc='Phrases', dynamic_ncols=True)
         start_time = time.time()
+        
         for phrase_id, phrase in phrases:
             pbar.set_description(f'({phrase_id}/{number_of_phrases}) "{phrase}"')
-            body.send_keys('say ' + phrase)
-            time.sleep(0.3)  # Allow all keys to be entered.
+            body.send_keys('s')
+            body.send_keys('a')
+            body.send_keys('y')
+            body.send_keys(Keys.SPACE)
+            for c in phrase:
+                body.send_keys(c)
+
+            time.sleep(0.5)
+
             self.start_recording()
             body.send_keys(Keys.ENTER)
             while True:
                 filename = f'{phrase_id}'
                 self.save_recording(filename)
-                if self.check_silence(f'recordings/{filename}.wav', 750, -10000):
+                if self.check_silence(f'recordings/{filename}.wav', 1000, -10000):
                     break
             self.stop_recording()
             pbar.update(1)
+        
         pbar.close()
         elapsed_time = time.time() - start_time
         print(f'\n\nFinished in {elapsed_time} seconds.\n')
